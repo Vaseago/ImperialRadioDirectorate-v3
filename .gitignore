@@ -1,0 +1,32 @@
+# Runtime-generated state (playback-resume checkpoint, logs). Never
+# source. Blanket-ignored, same reasoning as the sibling v3 apps' own
+# DATA_DIR.
+data/
+data_desktop/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Machine-local
+.claude/settings.local.json
+
+# The owner's PERSONAL music/story library is large binaries, never
+# committed - same reasoning as legacy IRD's own music_library/. The
+# commercials/snippets pool is the opposite: real shipped app content
+# once real audio exists, so commercials_and_snippets/ is deliberately
+# NOT excluded here (matches legacy IRD's own music_library_commercials/
+# treatment).
+music/*
+!music/.gitkeep
+!music/README.md
+stories/*
+!stories/.gitkeep
+!stories/README.md
