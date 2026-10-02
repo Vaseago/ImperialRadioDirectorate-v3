@@ -41,4 +41,8 @@ const Api = {
       { series_id: seriesId, part_number: partNumber, elapsed_seconds: elapsedSeconds, force },
       { csrf: true }
     ),
+
+  appUpdateStatus: () => apiGet("/api/app-update/status"),
+  appUpdateCheck: () => apiPost("/api/app-update/check", null),
+  appUpdatePull: () => apiPost("/api/app-update/pull", null),
 };

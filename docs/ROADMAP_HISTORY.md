@@ -282,3 +282,64 @@ app in a browser, not just unit tests.
 **Left in Phase 6**: nothing functional — the real visual design pass
 (`docs/design_spec_draft/FRONTEND_VISUAL_DESIGN_DRAFT.md`) is still
 ahead, and Phase 7 (the desktop shell) hasn't started.
+
+## 2026-10-02 — App-update feature (git-pull self-update), clean-room from IID v3
+
+Owner's ask: bring IRD v3 the same "Check for App Update" capability IID
+v3 already has live on the Pi (self-restart-after-pull, confirmed working
+2026-08-29). Clean-room re-derived from IID v3's own `web/app_update.py`
+/ `web/supervised_restart.py` / `web/poller/app_update_poll.py` /
+`web/routers/app_update.py` (read as a blueprint, not copied) — same
+"check and ask" two-step flow (`GET /status`, `POST /check`, `POST
+/pull`), same `../GIT_WORKFLOW.md` `release`-tag policy, same
+`SUPERVISED_RESTART_OK` gate (set only by `_supervisor/supervisor.py`'s
+`_start()` — a self-restart is only ever attempted on a
+supervisor-managed process; everywhere else, including this repo's own
+`ird-v3-test` launcher and a bare `python ird_v3_web_main.py` run, a pull
+installs but leaves the restart to the operator).
+
+**One deliberate simplification vs. IID v3**: no WebSocket hub. IID v3's
+poller broadcasts `app_update.pending_changed` over a `ConnectionHub` it
+already has for other reasons; IRD v3 has no WebSocket infrastructure at
+all and nothing else that would justify building one just for this
+admin-adjacent feature. The frontend instead just polls `GET
+/api/app-update/status` once on load — the same posture the legacy
+(pre-v3) ISD/ILD apps took, per IID v3's own `SHARED_ARCHITECTURE.md`.
+
+**A real bug found live, not by the mocked unit tests** (testing against
+this app's own freshly-pushed `release` tag, 2026-10-02): `release` was
+created as an ANNOTATED tag (`git tag -a`, the normal `-m`-message form),
+and a bare `git rev-parse refs/tags/release` resolves to that tag
+OBJECT's own hash, not the commit it points to — the two can never be
+equal, so `check_for_update` would have reported "update pending" forever,
+even the instant after a real pull landed exactly on the tagged commit.
+Fixed with `^{commit}` peeling syntax (`refs/tags/release^{commit}`),
+which is also a safe no-op for a lightweight tag. Locked in with a real
+(non-mocked) git-repo integration test, since every mocked test just
+hands back whatever fake hash it's told to and physically cannot exercise
+real git ref-resolution semantics going wrong — worth checking whether
+IID v3's own `release` tag is lightweight or annotated, since an
+annotated tag there would carry the identical latent bug.
+
+Shipped: `web/app_update.py` (pure git check/pull, the annotated-tag fix
+above), `web/supervised_restart.py` (the gate + `trigger_self_restart`),
+`web/poller/app_update_poll.py` (periodic check, no broadcast),
+`web/routers/app_update.py` (the three routes), `web/app.py` (lifespan
+wiring — the poller's `run_forever()` task starts/cancels with the app;
+unconditionally constructed, not config-gated, since git operations don't
+touch `Config`), and a minimal frontend panel (`static/js/appUpdate.js` +
+an `#app-update-panel` section in `index.html`) — Check/Pull buttons, a
+confirm dialog before pulling, no visual design (matches Phase 6's own
+placeholder posture).
+
+A real `release` tag now exists on this repo's own GitHub remote,
+pointing at the Phase 6 commit (`a5dd504`) — **owner's own explicit
+request**, 2026-10-01 ("commit, push, and tag so it can be updated
+through the git"), the first real exercise of `../GIT_WORKFLOW.md`'s
+policy for this app. This app-update feature's own commit sits on
+`master`, verified (175/175 tests passing, Iron Gate clean, live-checked
+against the real tag in a browser) but **not yet marked `release`** —
+moving that tag is the owner's call alone, flagged here per the policy's
+own "proactively flag it, every time" rule.
+
+175/175 tests passing, Iron Gate clean first-pass.

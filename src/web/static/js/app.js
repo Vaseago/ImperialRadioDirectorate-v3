@@ -41,6 +41,14 @@ document.addEventListener("DOMContentLoaded", () => {
   music.loadStations();
   showMusic();
 
+  const appUpdate = new AppUpdatePanel({
+    panel: document.getElementById("app-update-panel"),
+    statusText: document.getElementById("app-update-status"),
+    checkButton: document.getElementById("app-update-check-btn"),
+    pullButton: document.getElementById("app-update-pull-btn"),
+  });
+  appUpdate.init();
+
   window.addEventListener("beforeunload", () => {
     stories.checkpoint(true);
   });

@@ -113,6 +113,13 @@ session, 139/139 tests passing.
   applied. Verified live via the `ird-v3-test` root-level launcher
   (142/142 tests passing, Iron Gate clean first-pass).
 
+**Added outside the phase plan, 2026-10-02**: the "Check for App Update"
+feature (git-pull self-update, clean-room from IID v3's own), including a
+real bug fix (annotated `release`-tag peeling) found live — see
+`docs/ROADMAP_HISTORY.md`'s own dated entry. 175/175 tests passing, Iron
+Gate clean first-pass. Shipped but not yet marked `release` — pending the
+owner's sign-off.
+
 ## Phase 7 — Desktop shell
 
 - [ ] Dual-shell pattern (own port, spawns local web instance by default,

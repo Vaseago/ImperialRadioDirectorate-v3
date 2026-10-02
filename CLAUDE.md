@@ -42,7 +42,16 @@ local media player with no EVE Online API dependency at all.
 - **Git & Workflow:** commit and push after each distinct, working build
   step; never stockpile changes. Master branch only — branch only when the
   owner explicitly asks. Never touch a version string/CHANGELOG unless
-  asked.
+  asked. **`../GIT_WORKFLOW.md`'s `release`-tag policy applies here too**
+  (it's a cross-app standing doc) — a live app-update check compares
+  against `refs/tags/release`, never `master`'s raw tip; moving that tag
+  is the owner's call alone, never Claude's own confidence. **Verified
+  fact (2026-10-02):** `release` is an ANNOTATED tag (`git tag -a`) — any
+  code resolving it with `git rev-parse` MUST peel with `^{commit}`
+  (`web/app_update.py`'s own `_resolve_release_tag`), or it silently
+  resolves to the tag object's own hash instead of the commit, which can
+  never compare equal to `HEAD` — a real bug found live against this
+  app's own tag, not caught by mocked tests.
 - **No ESI/SDE dependency, same as legacy** — stays a pure local media
   player, themed around EVE.
 - **Legal grounding carries over unchanged:** never extract/scrape audio
@@ -103,8 +112,12 @@ local media player with no EVE Online API dependency at all.
   persistence + the per-series throttled-checkpoint policy +
   `mark_listened`).
 - `src/web/` — FastAPI app factory (`app.py`), routers (`music.py`,
-  `stories.py`, `tracks.py`), `security.py` (CSRF), `errors.py` (domain
-  exception → HTTP mapping), `serializers.py`, `static/` (Phase 6's
+  `stories.py`, `tracks.py`, `app_update.py`), `security.py` (CSRF),
+  `errors.py` (domain exception → HTTP mapping), `serializers.py`,
+  `app_update.py` (git check/pull), `supervised_restart.py` (the
+  self-restart gate), `poller/app_update_poll.py` (periodic check, no
+  WebSocket — IRD v3 has no hub, unlike the sibling v3 apps; the frontend
+  just polls `GET /api/app-update/status`), `static/` (Phase 6's
   functional-skeleton frontend — plain HTML/JS, mounted last so the API
   routers always take precedence).
 - `ird_v3_web_main.py` — the real entry point.
