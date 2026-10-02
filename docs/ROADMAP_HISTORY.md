@@ -82,3 +82,32 @@ verified), not mocks — 54/54 tests passing, Iron Gate clean first-pass
 
 **Left in Phase 2**: nothing — Phase 2 is complete. Phase 3 (solvers: the
 ad-roll scheduler, story-sequencing walk) is next.
+
+## 2026-10-01 — Phase 3: solvers/ (ad_scheduler, story_sequence)
+
+Shipped: `solvers/ad_scheduler.py` (`should_play_interlude_after_music_track`
+— a plain 25% check, no dice framing; `should_play_interlude_after_story_part`
+— an explicit d100 roll via `roll_d100()`, 1-50 triggers via
+`D100Roll.triggers()` from Phase 1 — both take an injected `random.Random`
+so tests assert the exact boundary condition rather than a long-run
+statistical rate) and `solvers/story_sequence.py`
+(`resolve_next_story_position` — the pure "what plays next" walk: starts
+at the first series' first part when nothing has played yet, advances
+within a series, moves to the next series once one finishes, wraps around
+to the first series after the last one finishes so the Stories channel
+loops rather than stopping, and degrades gracefully — not a crash — if a
+stored resume position references a series/part that no longer exists).
+
+A real DAG decision made while building this: `story_sequence.py`
+deliberately takes only `StorySeriesId`/`StoryPartNumber` tuples, never
+the real `adapters.library.StorySeries`/`StoryPart` from Phase 2 — the
+layer DAG (`config < primitives < schema < {storage, adapters} < solvers
+< services < web`) forbids `solvers/` from importing `adapters/` at all.
+`services/` (Phase 4) will build the plain id-tuple structure this solver
+consumes from a real scan, call the solver, then map its answer back to
+the real `Track` for playback.
+
+75/75 tests passing, Iron Gate clean first-pass.
+
+**Left in Phase 3**: nothing — Phase 3 is complete. Phase 4 (services:
+orchestration + the resume-state checkpoint writer) is next.

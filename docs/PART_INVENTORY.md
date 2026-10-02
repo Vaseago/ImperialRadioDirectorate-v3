@@ -40,10 +40,15 @@ Approved architecture/scope plan: `C:\Users\vasea\.claude\plans\misty-cuddling-m
 
 ## Phase 3 — Solvers
 
-- [ ] `src/solvers/ad_scheduler.py` — music's plain 25% check, Stories'
-  explicit d100 roll (1-50 triggers).
-- [ ] `src/solvers/story_sequence.py` — pure "given current series+part,
-  what's next" walk.
+- [x] `src/solvers/ad_scheduler.py` — music's plain 25% check
+  (`should_play_interlude_after_music_track`), Stories' explicit d100 roll
+  (`should_play_interlude_after_story_part`, 1-50 triggers). Both take an
+  injected `random.Random` for deterministic tests.
+- [x] `src/solvers/story_sequence.py` — `resolve_next_story_position`, pure
+  "given current series+part, what's next" walk. Deliberately operates on
+  plain `StorySeriesId`/`StoryPartNumber` tuples, never the real
+  `adapters.library.StorySeries` — the layer DAG forbids `solvers/` from
+  importing `adapters/` at all.
 
 ## Phase 4 — Services
 
