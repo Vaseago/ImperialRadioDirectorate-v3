@@ -25,7 +25,13 @@ from solvers.story_sequence import StorySeriesOrder
 
 from .resume_state_store import ResumeCheckpointManager
 
-__all__ = ["pick_random_track", "pick_interlude", "MusicChannelService", "StoriesChannelService"]
+__all__ = [
+    "pick_random_track",
+    "pick_interlude",
+    "find_track_by_id",
+    "MusicChannelService",
+    "StoriesChannelService",
+]
 
 
 def pick_random_track(
@@ -52,6 +58,21 @@ def pick_interlude(
     pool, same as legacy IRD's own behavior."""
     pool = scan_library_dirs(config.interludes_dirs)
     return pick_random_track(pool, exclude=exclude, rng=rng)
+
+
+def find_track_by_id(config: Config, track_id: TrackId) -> Track | None:
+    """The one real track behind `track_id`, searching every pool
+    (music, interludes, story parts) — the streaming endpoint (Phase 5)
+    serves any track by id regardless of which pool it came from, so it
+    needs this cross-pool lookup rather than three separate endpoints."""
+    for track in (*scan_library_dirs(config.music_dirs), *scan_library_dirs(config.interludes_dirs)):
+        if track.id == track_id:
+            return track
+    for series in scan_story_dirs(config.stories_dirs):
+        for part in series.parts:
+            if part.track.id == track_id:
+                return part.track
+    return None
 
 
 @dataclass(frozen=True, slots=True)

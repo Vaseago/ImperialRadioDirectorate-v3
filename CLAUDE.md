@@ -79,12 +79,19 @@ local media player with no EVE Online API dependency at all.
   `StoryPartNumber`, `D100Roll`, `DomainRuleViolation`.
 - `src/schema/` — `PlaybackResumeState` (the one real persisted document).
 - `src/storage/` — atomic typed-JSON persistence (`json_store.py`).
-- `src/adapters/` — (Phase 2, not yet built) music/commercials/story
-  library scanning.
-- `src/solvers/` — (Phase 3, not yet built) the ad-roll scheduler and
-  story-sequencing walk — pure, no I/O.
-- `src/services/` — (Phase 4, not yet built) orchestration.
-- `src/web/` — (Phase 5, not yet built) FastAPI app + routers.
+- `src/adapters/library/` — music/commercials scanning (`scanner.py`) and
+  story-series scanning (`story_scanner.py`).
+- `src/solvers/` — `ad_scheduler.py` (music's plain 25% check, Stories'
+  d100 roll) and `story_sequence.py` (the pure story-sequencing walk) —
+  no I/O, no `adapters/` import at all (DAG-enforced).
+- `src/services/` — `playback_service.py` (the two channel services +
+  shared interlude/track lookup) and `resume_state_store.py` (typed
+  persistence + the throttled-checkpoint policy).
+- `src/web/` — FastAPI app factory (`app.py`), routers (`music.py`,
+  `stories.py`, `tracks.py`), `security.py` (CSRF), `errors.py` (domain
+  exception → HTTP mapping), `serializers.py`. **No frontend/static assets
+  yet** — Phase 6 does not start without the owner.
+- `ird_v3_web_main.py` — the real entry point.
 - `desktop_shell/` — (Phase 7, not yet built) thin PySide6 wrapper.
 - `music/`, `stories/`, `commercials_and_snippets/` — the three content
   folders (each has its own explanatory `README.md`). Only

@@ -40,3 +40,9 @@ target-version = "py312"
 # stylistic, same exclusion the sibling apps carry.
 select = ["E", "W", "F", "I", "UP", "B"]
 ignore = ["UP047"]
+
+[tool.ruff.lint.per-file-ignores]
+# A markdown table in a docstring — genuinely can't wrap without breaking
+# the table, not a real long-line problem. Same exception ISD v3's own
+# ruff config carries for its identical `web/errors.py` shape.
+"src/web/errors.py" = ["E501"]

@@ -3,7 +3,13 @@ resume-state checkpoint manager. Re-exports the package's public names."""
 
 from __future__ import annotations
 
-from .playback_service import MusicChannelService, StoriesChannelService, pick_interlude, pick_random_track
+from .playback_service import (
+    MusicChannelService,
+    StoriesChannelService,
+    find_track_by_id,
+    pick_interlude,
+    pick_random_track,
+)
 from .resume_state_store import PlaybackResumeStateStore, ResumeCheckpointManager
 
 __all__ = [
@@ -11,6 +17,7 @@ __all__ = [
     "StoriesChannelService",
     "pick_random_track",
     "pick_interlude",
+    "find_track_by_id",
     "PlaybackResumeStateStore",
     "ResumeCheckpointManager",
 ]

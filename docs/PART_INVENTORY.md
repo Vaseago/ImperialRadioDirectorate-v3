@@ -63,14 +63,40 @@ Approved architecture/scope plan: `C:\Users\vasea\.claude\plans\misty-cuddling-m
 
 ## Phase 5 — Web
 
-- [ ] FastAPI app + routers (library listing, stream endpoint, resume-state
-  read/write, rescan), CSRF guard (`X-IRD-Request`).
-- [ ] Explicit extension→MIME override table for the stream endpoint
-  (not relying on stdlib `mimetypes` alone) — verified live 2026-10-01
-  that `.mp4` guesses as `video/mp4` (legacy's own known issue), `.aac`
-  guesses as the non-standard `audio/vnd.dlna.adts`, and `.flac` guesses
-  as the older `audio/x-flac`; override all three to standard audio MIME
-  types for maximum browser compatibility.
+- [x] `src/web/app.py` — `create_app(config)` factory (DI — tests build an
+  app against an isolated `Config`, never the real filesystem), stores the
+  two channel services + the `ResumeCheckpointManager` on `app.state`.
+  **No caching anywhere** — confirmed directly with the owner, 2026-10-01:
+  every request re-scans fresh, so there's no rescan endpoint at all
+  (legacy IRD's own cached-`app.state` + explicit `/rescan` model doesn't
+  carry forward).
+- [x] `src/web/routers/music.py` — `GET /api/music/stations`,
+  `GET /api/music/stations/{station}/next` (returns a 1-or-2-item
+  `items` list: an interlude first if the 25% roll triggers, then the
+  picked track — all scheduling stays server-side).
+- [x] `src/web/routers/stories.py` — `GET /api/stories/current` (resume
+  position, never rolls the interlude dice), `POST /api/stories/advance`
+  (same `items`-list shape as music, using the 50% d100 roll),
+  `POST /api/stories/checkpoint` (the one real state-changing write,
+  CSRF-guarded).
+- [x] `src/web/routers/tracks.py` — `GET /api/tracks/{id}/stream`,
+  cross-pool lookup via `services.find_track_by_id` (a small Phase 4
+  extension). Explicit extension→MIME override table (`.mp4`→`audio/mp4`,
+  `.aac`→`audio/aac`, `.flac`→`audio/flac`) — verified live 2026-10-01 that
+  stdlib `mimetypes` gets all three wrong for an `<audio>` element,
+  resolving the gap flagged during Phase 2's Gemini-note review.
+- [x] `src/web/security.py` — `require_same_origin_header`
+  (`X-IRD-Request`), re-derived from legacy IRD's own.
+- [x] `src/web/errors.py` — `register_exception_handlers`, hand-matched
+  from ISD v3's own (`DomainRuleViolation`→400, `ValueError`→400,
+  `FileNotFoundError`→404, `StorageError`→500) — no router needs a bare
+  `try`/`except`.
+- [x] `ird_v3_web_main.py` — the real entry point, hand-matched from the
+  sibling apps' own `*_web_main.py`.
+
+All 5 backend phases are now complete (112/112 tests passing, Iron Gate
+clean first-pass). **Standing instruction from the owner, 2026-10-01: do
+not start Phase 6 without the owner.**
 
 ## Phase 6 — Frontend (functional skeleton) — NOT started without the owner
 

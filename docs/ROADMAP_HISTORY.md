@@ -135,3 +135,59 @@ Phase 2's scanner tests — not mocks), Iron Gate clean first-pass.
 **Left in Phase 4**: nothing — Phase 4 is complete. Phase 5 (the FastAPI
 web app + routers, including the explicit MIME-mapping gap flagged during
 Phase 2) is next.
+
+## 2026-10-01 — Phase 5: web/ (app factory, routers, security, errors)
+
+A real architecture question surfaced before building this phase and was
+confirmed directly with the owner: Phase 4's services re-scan the
+filesystem fresh on every call with no caching, which makes legacy IRD's
+"scan once at startup, cache in `app.state`, explicit rescan action"
+model meaningless here — nothing is ever cached to invalidate. Owner's
+call: keep it that way (always fresh, no rescan endpoint at all), rather
+than retrofitting caching into Phase 4 to match legacy's model.
+
+Shipped: `web/app.py` (`create_app(config)` factory, DI-friendly — tests
+build an app against an isolated `Config`; stores the two Phase 4
+services + a `ResumeCheckpointManager` on `app.state`), `web/errors.py`
+(hand-matched from ISD v3's own — `DomainRuleViolation`→400 with the
+`rule` field surfaced, `ValueError`→400, `FileNotFoundError`→404,
+`StorageError`→500, so a bad request like `part_number: 0` comes back as
+a clean 400, not a raw 500), `web/security.py` (`require_same_origin_header`,
+re-derived from legacy IRD's own `X-IRD-Request` CSRF mitigation),
+`web/serializers.py` (shared track/position JSON shapes), and three
+routers:
+
+- `routers/music.py` — stations list + `next` (1-or-2-item `items`
+  response: interlude first if the 25% roll triggers, then the picked
+  track).
+- `routers/stories.py` — `current` (never rolls the interlude dice —
+  resuming shouldn't surprise the listener with an ad before anything's
+  even playing again), `advance` (same `items` shape as music, using the
+  50% d100 roll), `checkpoint` (the one real state-changing write, the
+  only CSRF-guarded route — matches legacy's own precedent of guarding
+  only the actual state-mutating endpoint, not every POST).
+- `routers/tracks.py` — the shared cross-pool stream endpoint
+  (`services.find_track_by_id`, a small Phase 4 extension — searches
+  music, interludes, and every story part for one id, since a single
+  stream URL serves any pool). Carries the explicit MIME-override table
+  flagged during Phase 2's Gemini-note review: `.mp4`→`audio/mp4` (legacy's
+  own known issue), `.aac`→`audio/aac` (stdlib guesses the non-standard
+  `audio/vnd.dlna.adts`), `.flac`→`audio/flac` (stdlib guesses the older
+  `audio/x-flac`).
+
+`ird_v3_web_main.py` (the real entry point) hand-matched from the sibling
+apps' own `*_web_main.py`.
+
+112/112 tests passing — real `TestClient` requests against the real ASGI
+app (not mocks), including a genuine `Range: bytes=0-99` request
+confirmed returning `206`/`Content-Range`, a 403 on a missing CSRF header,
+and a 400 (not a 500) on an out-of-range `part_number`. Iron Gate clean
+first-pass (one new `_FORBIDDEN_STORE_IMPORTS` entry —
+`PlaybackResumeStateStore` — added now that `web/` actually exists; one
+new ruff per-file-ignore for `web/errors.py`'s docstring table, same
+exception ISD v3 carries for the identical shape).
+
+**Left in Phase 5**: nothing — Phase 5 is complete, and with it, every
+backend phase (1-5) of this build. **All 112 tests passing. Standing
+instruction from the owner, 2026-10-01: Phase 6 (the frontend) does not
+start without the owner.**

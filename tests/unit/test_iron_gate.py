@@ -200,12 +200,12 @@ def test_layer_imports_follow_the_dag():
 _ROUTERS_DIR = SRC / "web" / "routers"
 
 # Real persisted-document Store classes, each behind exactly one owning
-# Manager. Empty for now — no Store/Manager pair exists yet (Phase 1 has
-# no web/ layer). Add an entry here the moment one lands, same
-# hand-matched shape the sibling apps use — never widen this into a
-# generic name-suffix check (see the sibling apps' own history of a false
-# positive on an in-memory, non-persisted Store there).
-_FORBIDDEN_STORE_IMPORTS: dict[str, str] = {}
+# Manager — the ONLY things a router may never import directly. Never
+# widen this into a generic name-suffix check (see the sibling apps' own
+# history of a false positive on an in-memory, non-persisted Store there).
+_FORBIDDEN_STORE_IMPORTS: dict[str, str] = {
+    "PlaybackResumeStateStore": "services.resume_state_store.ResumeCheckpointManager",
+}
 
 
 def test_routers_never_import_a_store_directly():
