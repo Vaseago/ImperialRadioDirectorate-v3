@@ -53,23 +53,33 @@ local media player with no EVE Online API dependency at all.
   spawning a local web instance by default, `--remote-url` override for
   Pi/shared access — same shape as the other three v3 apps' shells,
   hand-matched not shared.
-- **Do not start frontend (Phase 6) work without the owner** — standing
-  instruction, owner's own words, 2026-10-01.
+- **Phase 6 functional skeleton shipped 2026-10-01** — plain, un-styled
+  HTML/JS wired to the real endpoints (`src/web/static/`). Real visual
+  design is a separate later live session — a draft spec from the owner
+  is filed at `docs/design_spec_draft/FRONTEND_VISUAL_DESIGN_DRAFT.md`,
+  not yet applied.
 
 ## What changed vs. legacy IRD (resolved 2026-10-01, see the plan file for full detail)
 
 - The legacy car-radio/tuning-dial **visual design is out** — the
   interaction model (tune between channels, no track list) stays, restyled
   to fit EVE's own visual language. Real visual design deferred to a live
-  session after Phase 6's functional skeleton exists.
+  session after Phase 6's functional skeleton exists (now shipped —
+  `docs/design_spec_draft/` holds the draft to work from).
 - Two tunable channel kinds: **Music** (folder-per-station, same as
-  legacy) and **Stories** (exactly one channel, series play in order,
-  parts within a series always sequential, position persists across
-  restarts).
+  legacy) and **Stories** — **re-architected 2026-10-01** to tune
+  per-series, exactly like Music's stations (the owner picks which story
+  to hear), not one combined channel that auto-cycles through every
+  series. Each series remembers its own resume position and a `listened`
+  flag independently; finishing one auto-advances to the next unlistened
+  series, stopping (not resetting/looping) once every series has been
+  heard at least once. See `docs/ROADMAP_HISTORY.md`'s own dated entry
+  for the full resolution.
 - Two distinct ad/snippet roll mechanisms: Music keeps a **plain 25%
   check** (no dice framing — owner's explicit call); Stories uses an
-  **explicit d100 roll, 1-50 triggers**. Both pick from the same shared
-  `commercials_and_snippets/` pool.
+  **explicit d100 roll, 1-50 triggers**, still rolled once per part end
+  regardless of the per-series rework above. Both pick from the same
+  shared `commercials_and_snippets/` pool.
 
 ## Layout
 
@@ -77,20 +87,26 @@ local media player with no EVE Online API dependency at all.
   No ESI/SDE fields at all.
 - `src/primitives/` — `TrackId`, `StationName`, `StorySeriesId`,
   `StoryPartNumber`, `D100Roll`, `DomainRuleViolation`.
-- `src/schema/` — `PlaybackResumeState` (the one real persisted document).
+- `src/schema/` — `PlaybackResumeState` (the one real persisted document
+  this app needs — a tuple of per-series `SeriesResumeState`, keyed by
+  `series_id`, each with its own part/elapsed/listened state).
 - `src/storage/` — atomic typed-JSON persistence (`json_store.py`).
 - `src/adapters/library/` — music/commercials scanning (`scanner.py`) and
   story-series scanning (`story_scanner.py`).
 - `src/solvers/` — `ad_scheduler.py` (music's plain 25% check, Stories'
-  d100 roll) and `story_sequence.py` (the pure story-sequencing walk) —
-  no I/O, no `adapters/` import at all (DAG-enforced).
+  d100 roll) and `story_sequence.py` (`resume_part_for_series`,
+  `next_part_in_series`, `pick_next_unlistened_series` — the pure
+  per-series resume/advance logic) — no I/O, no `adapters/` import at all
+  (DAG-enforced).
 - `src/services/` — `playback_service.py` (the two channel services +
   shared interlude/track lookup) and `resume_state_store.py` (typed
-  persistence + the throttled-checkpoint policy).
+  persistence + the per-series throttled-checkpoint policy +
+  `mark_listened`).
 - `src/web/` — FastAPI app factory (`app.py`), routers (`music.py`,
   `stories.py`, `tracks.py`), `security.py` (CSRF), `errors.py` (domain
-  exception → HTTP mapping), `serializers.py`. **No frontend/static assets
-  yet** — Phase 6 does not start without the owner.
+  exception → HTTP mapping), `serializers.py`, `static/` (Phase 6's
+  functional-skeleton frontend — plain HTML/JS, mounted last so the API
+  routers always take precedence).
 - `ird_v3_web_main.py` — the real entry point.
 - `desktop_shell/` — (Phase 7, not yet built) thin PySide6 wrapper.
 - `music/`, `stories/`, `commercials_and_snippets/` — the three content

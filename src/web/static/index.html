@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Imperial Radio Directorate</title>
+</head>
+<body>
+<h1>Imperial Radio Directorate</h1>
+<p>Phase 6 functional skeleton &mdash; no visual design yet. Real visual design
+is a separate later pass.</p>
+
+<nav>
+  <button id="channel-music-btn" type="button">Music</button>
+  <button id="channel-stories-btn" type="button">Stories</button>
+</nav>
+
+<section id="music-panel" hidden>
+  <h2>Music</h2>
+  <label for="station-select">Station</label>
+  <select id="station-select"></select>
+  <button id="tune-music-btn" type="button">Tune In</button>
+  <p id="music-now-playing">Nothing playing</p>
+</section>
+
+<section id="stories-panel" hidden>
+  <h2>Stories</h2>
+  <ul id="story-series-list"></ul>
+  <p id="stories-now-playing">Nothing playing</p>
+</section>
+
+<audio id="player" controls></audio>
+
+<script src="js/api.js"></script>
+<script src="js/musicChannel.js"></script>
+<script src="js/storiesChannel.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

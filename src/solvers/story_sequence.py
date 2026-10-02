@@ -1,67 +1,93 @@
-"""Pure "what plays next on the Stories channel" walk.
+"""Pure "what plays next on the Stories channel" logic.
 
-Deliberately takes only identity data (`StorySeriesId` + an ordered tuple
-of `StoryPartNumber`), never the real `adapters.library.StorySeries`/
-`StoryPart` (which carry filesystem paths and Track data) — the layer DAG
-forbids `solvers/` from importing `adapters/` at all, and this also keeps
-the walk itself trivially unit-testable with fake series data, no
-filesystem involved. `services/` is responsible for building this
-structure from a real scan and mapping the result back to a real Track.
+Resolved 2026-10-01: Stories is tuned per-series, like Music's stations —
+the listener picks which series to play — so there is no single global
+walk through every series any more. What remains pure and testable:
 
-Series are expected pre-sorted (alphabetically, same order
-`adapters.library.scan_story_dirs` already returns) and each series'
-parts pre-sorted ascending — this module only walks the given order, it
-never re-sorts.
+* `resume_part_for_series` — where to resume *one* series the listener
+  just tuned (or auto-advanced) into.
+* `next_part_in_series` — the next part after the one that just finished,
+  within that same series, or `None` once the series is exhausted.
+* `pick_next_unlistened_series` — which series to auto-advance into once
+  the current one finishes: the next one (in series order) that has not
+  been heard through yet, searching forward and wrapping around so a
+  full library pass is fair; `None` once nothing unlistened remains
+  (auto-advance stops there — owner's own call, not a reset-and-loop).
+
+Deliberately takes only identity data (`StorySeriesId` / `StoryPartNumber`
+/ `SeriesResumeState`), never the real `adapters.library.StorySeries` —
+the layer DAG forbids `solvers/` from importing `adapters/` at all, and
+this keeps the walk trivially unit-testable with fake data, no filesystem
+involved. `services/` builds this structure from a real scan and maps the
+result back to a real `Track`.
+
+Series/parts are expected pre-sorted (alphabetically for series, same
+order `adapters.library.scan_story_dirs` already returns; ascending for
+parts within a series) — this module only walks the given order, it never
+re-sorts.
 """
 
 from __future__ import annotations
 
 from primitives import StoryPartNumber, StorySeriesId
+from schema import SeriesResumeState
 
-__all__ = ["StorySeriesOrder", "resolve_next_story_position"]
+__all__ = ["SeriesParts", "resume_part_for_series", "next_part_in_series", "pick_next_unlistened_series"]
 
-# (series_id, its parts in play order) for every series, in the order
-# series themselves play.
-StorySeriesOrder = tuple[tuple[StorySeriesId, tuple[StoryPartNumber, ...]], ...]
+# One series' parts, in play order.
+SeriesParts = tuple[StoryPartNumber, ...]
 
 
-def resolve_next_story_position(
-    series_order: StorySeriesOrder,
-    current_series_id: StorySeriesId | None,
-    current_part_number: StoryPartNumber | None,
-) -> tuple[StorySeriesId, StoryPartNumber] | None:
-    """The next (series, part) to play.
+def resume_part_for_series(parts: SeriesParts, saved: SeriesResumeState | None) -> StoryPartNumber | None:
+    """Where to resume this series: the first part if it has never been
+    started, has already been listened all the way through, or its saved
+    part number no longer exists in `parts` (e.g. a file was removed
+    since) — otherwise the saved part number. `None` if the series has no
+    parts at all."""
+    if not parts:
+        return None
+    if saved is None or saved.listened:
+        return parts[0]
+    candidate = StoryPartNumber(saved.part_number)
+    return candidate if candidate in parts else parts[0]
 
-    * `current_series_id is None` — nothing has played yet (or the resume
-      state was empty): returns the very first series' first part.
-    * The current series still has parts left — returns the next part in
-      that same series.
-    * The current series just finished (or its id no longer exists in
-      `series_order`, e.g. its folder was deleted) — returns the next
-      series' first part, wrapping around to the first series once the
-      last one finishes (the Stories channel loops, it doesn't stop).
-    * `series_order` is empty — returns `None` (no story content exists).
-    """
-    if not series_order:
+
+def next_part_in_series(parts: SeriesParts, current_part_number: StoryPartNumber) -> StoryPartNumber | None:
+    """The part after `current_part_number` in `parts`, or `None` if it
+    was the last one (the series just finished) or no longer exists in
+    `parts` (e.g. a file was removed since — treated the same as
+    "finished," not a crash)."""
+    try:
+        index = parts.index(current_part_number)
+    except ValueError:
+        return None
+    return parts[index + 1] if index + 1 < len(parts) else None
+
+
+def pick_next_unlistened_series(
+    series_ids_in_order: tuple[StorySeriesId, ...],
+    listened_series_ids: frozenset[str],
+    *,
+    start_after: StorySeriesId | None = None,
+) -> StorySeriesId | None:
+    """The next series in `series_ids_in_order` not present in
+    `listened_series_ids`, searching forward from just after
+    `start_after` and wrapping around once — so every series gets exactly
+    one fair look per full pass. `None` once no unlistened series
+    remains, which is where auto-advance stops (it does not reset the
+    `listened` set and loop the whole library again)."""
+    if not series_ids_in_order:
         return None
 
-    if current_series_id is None:
-        first_series_id, first_parts = series_order[0]
-        return first_series_id, first_parts[0]
+    start_index = 0
+    if start_after is not None:
+        found = next((i for i, sid in enumerate(series_ids_in_order) if sid == start_after), None)
+        if found is not None:
+            start_index = (found + 1) % len(series_ids_in_order)
 
-    index = next((i for i, (sid, _parts) in enumerate(series_order) if sid == current_series_id), None)
-
-    if index is not None and current_part_number is not None:
-        _sid, parts = series_order[index]
-        try:
-            position = parts.index(current_part_number)
-        except ValueError:
-            position = None
-        if position is not None and position + 1 < len(parts):
-            return current_series_id, parts[position + 1]
-
-    # Current series exhausted, its id vanished, or no part was given —
-    # advance to the next series, wrapping around to the first.
-    next_index = 0 if index is None else (index + 1) % len(series_order)
-    next_series_id, next_parts = series_order[next_index]
-    return next_series_id, next_parts[0]
+    count = len(series_ids_in_order)
+    for offset in range(count):
+        candidate = series_ids_in_order[(start_index + offset) % count]
+        if candidate.value not in listened_series_ids:
+            return candidate
+    return None

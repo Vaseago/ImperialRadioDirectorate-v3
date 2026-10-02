@@ -95,13 +95,23 @@ Approved architecture/scope plan: `C:\Users\vasea\.claude\plans\misty-cuddling-m
   sibling apps' own `*_web_main.py`.
 
 All 5 backend phases are now complete (112/112 tests passing, Iron Gate
-clean first-pass). **Standing instruction from the owner, 2026-10-01: do
-not start Phase 6 without the owner.**
+clean first-pass).
 
-## Phase 6 — Frontend (functional skeleton) — NOT started without the owner
+**Mid-build revision, 2026-10-01**: Stories re-architected to tune
+per-series (like Music's stations) instead of one combined auto-cycling
+channel — see `docs/ROADMAP_HISTORY.md`'s own dated entry for the full
+resolution. Touches Phase 1's schema, Phase 3's solver, Phase 4's
+service, and Phase 5's `stories.py` router; all re-shipped the same
+session, 139/139 tests passing.
 
-- [ ] Station/channel tuning UI wired to the real endpoints — functional
-  only, real visual design is a separate later live session.
+## Phase 6 — Frontend (functional skeleton)
+
+- [x] Station/channel tuning UI wired to the real endpoints — functional
+  only, un-styled placeholder (`src/web/static/`). Real visual design is
+  a separate later live session — draft spec filed at
+  `docs/design_spec_draft/FRONTEND_VISUAL_DESIGN_DRAFT.md`, not yet
+  applied. Verified live via the `ird-v3-test` root-level launcher
+  (142/142 tests passing, Iron Gate clean first-pass).
 
 ## Phase 7 — Desktop shell
 

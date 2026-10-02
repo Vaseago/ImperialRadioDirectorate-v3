@@ -11,7 +11,7 @@ from .ad_scheduler import (
     should_play_interlude_after_music_track,
     should_play_interlude_after_story_part,
 )
-from .story_sequence import StorySeriesOrder, resolve_next_story_position
+from .story_sequence import SeriesParts, next_part_in_series, pick_next_unlistened_series, resume_part_for_series
 
 __all__ = [
     "MUSIC_AD_CHANCE",
@@ -19,6 +19,8 @@ __all__ = [
     "roll_d100",
     "should_play_interlude_after_music_track",
     "should_play_interlude_after_story_part",
-    "StorySeriesOrder",
-    "resolve_next_story_position",
+    "SeriesParts",
+    "resume_part_for_series",
+    "next_part_in_series",
+    "pick_next_unlistened_series",
 ]

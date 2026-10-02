@@ -17,11 +17,13 @@ from adapters.library import StorySeries, Track, scan_library_dirs, scan_story_d
 from config import Config
 from primitives import StationName, StoryPartNumber, StorySeriesId, TrackId
 from solvers import (
-    resolve_next_story_position,
+    next_part_in_series,
+    pick_next_unlistened_series,
+    resume_part_for_series,
     should_play_interlude_after_music_track,
     should_play_interlude_after_story_part,
 )
-from solvers.story_sequence import StorySeriesOrder
+from solvers.story_sequence import SeriesParts
 
 from .resume_state_store import ResumeCheckpointManager
 
@@ -30,6 +32,8 @@ __all__ = [
     "pick_interlude",
     "find_track_by_id",
     "MusicChannelService",
+    "StorySeriesSummary",
+    "StoriesAdvanceResult",
     "StoriesChannelService",
 ]
 
@@ -101,9 +105,35 @@ class MusicChannelService:
 
 
 @dataclass(frozen=True, slots=True)
+class StorySeriesSummary:
+    """One series' listing entry for the tuner — enough for a picker to
+    show what's available and whether it's already been heard."""
+
+    series_id: StorySeriesId
+    part_count: int
+    listened: bool
+    resume_part_number: StoryPartNumber
+
+
+@dataclass(frozen=True, slots=True)
+class StoriesAdvanceResult:
+    """The outcome of finishing one story part. `next_position` is `None`
+    only when the just-finished series completed the full library (every
+    series now listened) — auto-advance stops there rather than resetting
+    and looping (owner's own call, 2026-10-01)."""
+
+    next_position: tuple[StorySeriesId, StoryPartNumber] | None
+    series_completed: bool
+
+
+@dataclass(frozen=True, slots=True)
 class StoriesChannelService:
-    """Exactly one channel — plays every series in order, parts within a
-    series always sequential, resume position persists across restarts."""
+    """Stories is tuned per-series, like Music's stations — the listener
+    picks which series to play (`list_series`/`tune_in`) — except each
+    series remembers its own resume position independently, and finishing
+    one auto-advances to the next series that hasn't been heard yet
+    (`advance`), stopping once every series has been heard through at
+    least once."""
 
     config: Config
     checkpoint_manager: ResumeCheckpointManager
@@ -112,8 +142,11 @@ class StoriesChannelService:
         return scan_story_dirs(self.config.stories_dirs)
 
     @staticmethod
-    def _series_order(series: tuple[StorySeries, ...]) -> StorySeriesOrder:
-        return tuple((s.series_id, tuple(p.part_number for p in s.parts)) for s in series)
+    def _parts_of(series: tuple[StorySeries, ...], series_id: StorySeriesId) -> SeriesParts:
+        for one_series in series:
+            if one_series.series_id == series_id:
+                return tuple(p.part_number for p in one_series.parts)
+        return ()
 
     @staticmethod
     def _track_for(
@@ -127,33 +160,72 @@ class StoriesChannelService:
                     return part.track
         return None
 
-    def current_position(self) -> tuple[StorySeriesId, StoryPartNumber] | None:
-        """Where playback should resume: the saved checkpoint if it still
-        points at real content, otherwise the very first position. `None`
-        if no story content exists at all."""
+    def list_series(self) -> tuple[StorySeriesSummary, ...]:
+        """Every story series, alphabetically — same order they're scanned
+        in — with each one's part count, listened flag, and where tuning
+        into it would resume."""
         series = self._series()
-        if not series:
+        state = self.checkpoint_manager.load()
+        summaries: list[StorySeriesSummary] = []
+        for one_series in series:
+            parts = tuple(p.part_number for p in one_series.parts)
+            saved = state.for_series(one_series.series_id.value)
+            resume_part = resume_part_for_series(parts, saved) or parts[0]
+            summaries.append(
+                StorySeriesSummary(
+                    series_id=one_series.series_id,
+                    part_count=len(parts),
+                    listened=saved.listened if saved is not None else False,
+                    resume_part_number=resume_part,
+                )
+            )
+        return tuple(summaries)
+
+    def tune_in(self, series_id: StorySeriesId) -> tuple[StoryPartNumber, float] | None:
+        """Where to resume `series_id`: its own saved position (elapsed
+        time included), or the first part at 0:00 if it's never been
+        started or has already been listened all the way through. `None`
+        if the series doesn't exist."""
+        series = self._series()
+        parts = self._parts_of(series, series_id)
+        if not parts:
             return None
         state = self.checkpoint_manager.load()
-        if state.series_id:
-            candidate = (StorySeriesId(state.series_id), StoryPartNumber(state.part_number))
-            if self._track_for(series, *candidate) is not None:
-                return candidate
-        # No saved state, or it points at content that no longer exists
-        # (e.g. a series folder was deleted) — start from the beginning.
-        return resolve_next_story_position(self._series_order(series), None, None)
-
-    def current_elapsed_seconds(self) -> float:
-        return self.checkpoint_manager.load().elapsed_seconds
+        saved = state.for_series(series_id.value)
+        resume_part = resume_part_for_series(parts, saved)
+        if resume_part is None:
+            return None
+        resumes_saved_position = saved is not None and not saved.listened and saved.part_number == resume_part.value
+        elapsed_seconds = saved.elapsed_seconds if resumes_saved_position else 0.0
+        return resume_part, elapsed_seconds
 
     def track_for_position(self, series_id: StorySeriesId, part_number: StoryPartNumber) -> Track | None:
         return self._track_for(self._series(), series_id, part_number)
 
-    def advance(
-        self, series_id: StorySeriesId, part_number: StoryPartNumber
-    ) -> tuple[StorySeriesId, StoryPartNumber] | None:
+    def advance(self, series_id: StorySeriesId, part_number: StoryPartNumber) -> StoriesAdvanceResult:
+        """The part that just finished was `(series_id, part_number)`.
+        Stays within the same series if it has parts left; otherwise marks
+        it listened (an immediate, unthrottled write) and auto-advances to
+        the next series that hasn't been heard yet."""
         series = self._series()
-        return resolve_next_story_position(self._series_order(series), series_id, part_number)
+        parts = self._parts_of(series, series_id)
+        next_part = next_part_in_series(parts, part_number) if parts else None
+        if next_part is not None:
+            return StoriesAdvanceResult(next_position=(series_id, next_part), series_completed=False)
+
+        self.checkpoint_manager.mark_listened(series_id, final_part_number=part_number)
+
+        state = self.checkpoint_manager.load()
+        order = tuple(s.series_id for s in series)
+        next_series_id = pick_next_unlistened_series(order, state.listened_series_ids(), start_after=series_id)
+        if next_series_id is None:
+            return StoriesAdvanceResult(next_position=None, series_completed=True)
+
+        next_parts = self._parts_of(series, next_series_id)
+        next_resume_part = resume_part_for_series(next_parts, state.for_series(next_series_id.value))
+        if next_resume_part is None:
+            return StoriesAdvanceResult(next_position=None, series_completed=True)
+        return StoriesAdvanceResult(next_position=(next_series_id, next_resume_part), series_completed=True)
 
     def should_play_interlude(self, *, rng: random.Random | None = None) -> bool:
         return should_play_interlude_after_story_part(rng)

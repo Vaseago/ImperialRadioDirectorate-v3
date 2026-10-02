@@ -10,7 +10,7 @@ infra, not domain logic.
 
 from __future__ import annotations
 
-__all__ = ["as_int", "as_optional_int", "as_str", "as_optional_str", "as_float"]
+__all__ = ["as_int", "as_optional_int", "as_str", "as_optional_str", "as_float", "as_bool"]
 
 
 def as_int(value: object, default: int = 0) -> int:
@@ -41,3 +41,7 @@ def as_float(value: object, default: float = 0.0) -> float:
         return float(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return default
+
+
+def as_bool(value: object, default: bool = False) -> bool:
+    return value if isinstance(value, bool) else default

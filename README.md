@@ -23,4 +23,13 @@ pytest
 
 ## Running the app
 
-Not yet available — Phase 5 (the web app) has not shipped.
+```
+python ird_v3_web_main.py
+```
+
+Serves the Phase 6 functional-skeleton frontend (plain, un-styled HTML/JS
+— real visual design is a separate later pass) at the configured
+`IRD_WEB_PORT` (default 8060). For local dev/preview with isolated
+synthetic test content instead of your real `music/`/`stories/` folders,
+use the root-level `ird-v3-test` launcher (`../.claude/test_launchers/ird_v3_test_main.py`,
+port 18061).

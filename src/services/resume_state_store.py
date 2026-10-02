@@ -1,14 +1,20 @@
 """Persistence for `PlaybackResumeState`, plus the throttled-checkpoint
 policy on top of it.
 
-Two pieces, same file (Phase 4's own scope): `PlaybackResumeStateStore`
-(a thin typed wrapper over `storage.JsonStore` — the Manager Isolation
-Law's "real persisted-document Store", never imported directly by a
-future `web/routers/` module once Phase 5 lands) and
-`ResumeCheckpointManager` (the thing a router *would* pull off
-`app.state` instead — owns the throttling policy: write at most once per
-`min_interval_seconds` unless `force=True`, "as close as possible," not
-continuous, the owner's own words).
+Two pieces, same file: `PlaybackResumeStateStore` (a thin typed wrapper
+over `storage.JsonStore` — the Manager Isolation Law's "real
+persisted-document Store," never imported directly by a `web/routers/`
+module) and `ResumeCheckpointManager` (the thing a router actually pulls
+off `app.state` instead).
+
+Each story series' periodic position checkpoint is throttled
+independently (write at most once per `min_interval_seconds` unless
+`force=True`) — tuning between two different stories within one story's
+throttle window must not block the *other* story's own write. Marking a
+series `listened` (`mark_listened`) always writes immediately, bypassing
+the throttle entirely: finishing a series is a discrete milestone, not a
+periodic tick, and losing it to a crash before the next throttled write
+would wrongly un-complete a story the listener already heard through.
 """
 
 from __future__ import annotations
@@ -18,7 +24,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from primitives import StoryPartNumber, StorySeriesId
-from schema import PLAYBACK_RESUME_STATE_SCHEMA_VERSION, PlaybackResumeState
+from schema import PLAYBACK_RESUME_STATE_SCHEMA_VERSION, PlaybackResumeState, SeriesResumeState
 from storage import JsonStore
 
 __all__ = ["PlaybackResumeStateStore", "ResumeCheckpointManager"]
@@ -28,7 +34,8 @@ DEFAULT_CHECKPOINT_INTERVAL_SECONDS = 15.0
 
 @dataclass(frozen=True, slots=True)
 class PlaybackResumeStateStore:
-    """Typed persistence for the one `PlaybackResumeState` singleton."""
+    """Typed persistence for the one `PlaybackResumeState` document (every
+    story series' own resume state, keyed inside it by `series_id`)."""
 
     path: Path
 
@@ -41,16 +48,20 @@ class PlaybackResumeStateStore:
         store.write(state.to_dict())
 
 
+def _now_iso() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
 @dataclass(slots=True)
 class ResumeCheckpointManager:
     """Owns when a checkpoint write actually happens. Not frozen — it
-    tracks mutable `_last_write_monotonic` state between calls, same
-    reasoning a sibling app's own `*Manager` classes carry mutable
+    tracks mutable per-series `_last_write_monotonic` state between calls,
+    same reasoning a sibling app's own `*Manager` classes carry mutable
     runtime state while the documents they persist stay frozen."""
 
     store: PlaybackResumeStateStore
     min_interval_seconds: float = DEFAULT_CHECKPOINT_INTERVAL_SECONDS
-    _last_write_monotonic: float | None = field(default=None, init=False, repr=False)
+    _last_write_monotonic: dict[str, float] = field(default_factory=dict, init=False, repr=False)
 
     def load(self) -> PlaybackResumeState:
         return self.store.load()
@@ -63,23 +74,40 @@ class ResumeCheckpointManager:
         elapsed_seconds: float,
         force: bool = False,
     ) -> bool:
-        """Write a checkpoint if `force` is set or enough time has passed
-        since the last real write. Returns whether a write actually
-        happened — useful for tests, not required by callers."""
+        """Write this series' position if `force` is set or enough time
+        has passed since its own last real write. Returns whether a write
+        actually happened — useful for tests, not required by callers."""
         now = time.monotonic()
-        due = (
-            force
-            or self._last_write_monotonic is None
-            or (now - self._last_write_monotonic) >= self.min_interval_seconds
-        )
+        last = self._last_write_monotonic.get(series_id.value)
+        due = force or last is None or (now - last) >= self.min_interval_seconds
         if not due:
             return False
-        state = PlaybackResumeState(
+
+        state = self.store.load()
+        existing = state.for_series(series_id.value)
+        updated = SeriesResumeState(
             series_id=series_id.value,
             part_number=part_number.value,
             elapsed_seconds=elapsed_seconds,
-            last_updated=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            listened=existing.listened if existing is not None else False,
+            last_updated=_now_iso(),
         )
-        self.store.save(state)
-        self._last_write_monotonic = now
+        self.store.save(state.with_series(updated))
+        self._last_write_monotonic[series_id.value] = now
         return True
+
+    def mark_listened(self, series_id: StorySeriesId, *, final_part_number: StoryPartNumber) -> None:
+        """Flags `series_id` as heard through to its end — always an
+        immediate, unthrottled write (a completion event, not a periodic
+        position tick). Preserves whatever `elapsed_seconds` was last
+        checkpointed for this series rather than fabricating a value."""
+        state = self.store.load()
+        existing = state.for_series(series_id.value)
+        updated = SeriesResumeState(
+            series_id=series_id.value,
+            part_number=final_part_number.value,
+            elapsed_seconds=existing.elapsed_seconds if existing is not None else 0.0,
+            listened=True,
+            last_updated=_now_iso(),
+        )
+        self.store.save(state.with_series(updated))

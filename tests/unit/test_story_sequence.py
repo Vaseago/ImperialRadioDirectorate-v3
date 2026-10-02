@@ -1,71 +1,107 @@
-"""Unit tests for `solvers.story_sequence` — pure walk, no filesystem, no
-`adapters/` dependency at all (fake series data only)."""
+"""Unit tests for `solvers.story_sequence` — pure per-series resume/advance
+logic plus the next-unlistened-series pick, no filesystem, no `adapters/`
+dependency at all (fake series/state data only)."""
 
 from __future__ import annotations
 
 from primitives import StoryPartNumber, StorySeriesId
-from solvers.story_sequence import resolve_next_story_position
+from schema import SeriesResumeState
+from solvers.story_sequence import next_part_in_series, pick_next_unlistened_series, resume_part_for_series
 
 _P = StoryPartNumber
 _S = StorySeriesId
 
 
-def _order(*series: tuple[str, tuple[int, ...]]):
-    return tuple((_S(sid), tuple(_P(n) for n in parts)) for sid, parts in series)
+def _parts(*numbers: int) -> tuple[StoryPartNumber, ...]:
+    return tuple(_P(n) for n in numbers)
 
 
-def test_empty_series_order_returns_none():
-    assert resolve_next_story_position((), None, None) is None
+# -- resume_part_for_series ---------------------------------------------- #
 
 
-def test_no_current_position_starts_at_first_series_first_part():
-    order = _order(("alien_invasion", (1, 2, 3)), ("zeta_front", (1, 2)))
-    result = resolve_next_story_position(order, None, None)
-    assert result == (_S("alien_invasion"), _P(1))
+def test_resume_part_for_series_returns_none_for_empty_parts():
+    assert resume_part_for_series((), None) is None
 
 
-def test_advances_to_next_part_within_same_series():
-    order = _order(("alien_invasion", (1, 2, 3)))
-    result = resolve_next_story_position(order, _S("alien_invasion"), _P(1))
-    assert result == (_S("alien_invasion"), _P(2))
+def test_resume_part_for_series_starts_at_first_part_with_no_saved_state():
+    assert resume_part_for_series(_parts(1, 2, 3), None) == _P(1)
 
 
-def test_advances_to_next_series_when_current_series_exhausted():
-    order = _order(("alien_invasion", (1, 2)), ("zeta_front", (1, 2)))
-    result = resolve_next_story_position(order, _S("alien_invasion"), _P(2))
-    assert result == (_S("zeta_front"), _P(1))
+def test_resume_part_for_series_resumes_at_the_saved_part():
+    saved = SeriesResumeState(series_id="alien_invasion", part_number=2)
+    assert resume_part_for_series(_parts(1, 2, 3), saved) == _P(2)
 
 
-def test_wraps_around_to_first_series_after_the_last_one_finishes():
-    order = _order(("alien_invasion", (1, 2)), ("zeta_front", (1, 2)))
-    result = resolve_next_story_position(order, _S("zeta_front"), _P(2))
-    assert result == (_S("alien_invasion"), _P(1))
+def test_resume_part_for_series_restarts_at_first_part_once_already_listened():
+    saved = SeriesResumeState(series_id="alien_invasion", part_number=3, listened=True)
+    assert resume_part_for_series(_parts(1, 2, 3), saved) == _P(1)
 
 
-def test_single_series_wraps_to_its_own_start():
-    order = _order(("alien_invasion", (1, 2)))
-    result = resolve_next_story_position(order, _S("alien_invasion"), _P(2))
-    assert result == (_S("alien_invasion"), _P(1))
+def test_resume_part_for_series_falls_back_to_first_part_when_saved_part_vanished():
+    # Saved part 5 no longer exists in this series (e.g. a file was removed).
+    saved = SeriesResumeState(series_id="alien_invasion", part_number=5)
+    assert resume_part_for_series(_parts(1, 2, 3), saved) == _P(1)
 
 
-def test_vanished_series_id_restarts_at_next_series_after_its_old_position():
-    # The current series was deleted (not in series_order any more) —
-    # falls through to "advance" semantics, landing on the first series.
-    order = _order(("zeta_front", (1, 2)))
-    result = resolve_next_story_position(order, _S("deleted_series"), _P(5))
-    assert result == (_S("zeta_front"), _P(1))
+# -- next_part_in_series --------------------------------------------------- #
 
 
-def test_part_number_not_found_in_current_series_falls_through_to_next_series():
-    # A stored resume part number that no longer exists in that series
-    # (e.g. a file was removed) — treated as "series exhausted," not a crash.
-    order = _order(("alien_invasion", (1, 2)), ("zeta_front", (1,)))
-    result = resolve_next_story_position(order, _S("alien_invasion"), _P(99))
-    assert result == (_S("zeta_front"), _P(1))
+def test_next_part_in_series_advances_to_the_next_part():
+    assert next_part_in_series(_parts(1, 2, 3), _P(1)) == _P(2)
 
 
-def test_numeric_ordering_is_trusted_as_given_not_resorted():
+def test_next_part_in_series_returns_none_when_current_is_the_last():
+    assert next_part_in_series(_parts(1, 2, 3), _P(3)) is None
+
+
+def test_next_part_in_series_returns_none_when_current_part_not_found():
+    assert next_part_in_series(_parts(1, 2), _P(99)) is None
+
+
+def test_next_part_in_series_trusts_given_order_not_resorted():
     # The solver never re-sorts — it trusts the order it was handed.
-    order = _order(("alien_invasion", (1, 10, 2)))
-    result = resolve_next_story_position(order, _S("alien_invasion"), _P(1))
-    assert result == (_S("alien_invasion"), _P(10))
+    assert next_part_in_series(_parts(1, 10, 2), _P(1)) == _P(10)
+
+
+# -- pick_next_unlistened_series -------------------------------------------- #
+
+
+def test_pick_next_unlistened_series_returns_none_for_empty_order():
+    assert pick_next_unlistened_series((), frozenset()) is None
+
+
+def test_pick_next_unlistened_series_returns_first_when_nothing_listened():
+    order = (_S("alien_invasion"), _S("zeta_front"))
+    assert pick_next_unlistened_series(order, frozenset()) == _S("alien_invasion")
+
+
+def test_pick_next_unlistened_series_skips_listened_ones():
+    order = (_S("alien_invasion"), _S("zeta_front"))
+    assert pick_next_unlistened_series(order, frozenset({"alien_invasion"})) == _S("zeta_front")
+
+
+def test_pick_next_unlistened_series_searches_forward_from_start_after():
+    order = (_S("alien_invasion"), _S("mid_front"), _S("zeta_front"))
+    result = pick_next_unlistened_series(order, frozenset(), start_after=_S("alien_invasion"))
+    assert result == _S("mid_front")
+
+
+def test_pick_next_unlistened_series_wraps_around():
+    order = (_S("alien_invasion"), _S("mid_front"), _S("zeta_front"))
+    # Everything except alien_invasion is listened; starting after zeta_front
+    # should wrap around and land back on alien_invasion.
+    listened = frozenset({"mid_front", "zeta_front"})
+    result = pick_next_unlistened_series(order, listened, start_after=_S("zeta_front"))
+    assert result == _S("alien_invasion")
+
+
+def test_pick_next_unlistened_series_returns_none_once_everything_listened():
+    order = (_S("alien_invasion"), _S("zeta_front"))
+    listened = frozenset({"alien_invasion", "zeta_front"})
+    assert pick_next_unlistened_series(order, listened, start_after=_S("zeta_front")) is None
+
+
+def test_pick_next_unlistened_series_unknown_start_after_starts_from_the_top():
+    order = (_S("alien_invasion"), _S("zeta_front"))
+    result = pick_next_unlistened_series(order, frozenset(), start_after=_S("deleted_series"))
+    assert result == _S("alien_invasion")

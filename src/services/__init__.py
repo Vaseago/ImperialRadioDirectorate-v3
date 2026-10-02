@@ -5,7 +5,9 @@ from __future__ import annotations
 
 from .playback_service import (
     MusicChannelService,
+    StoriesAdvanceResult,
     StoriesChannelService,
+    StorySeriesSummary,
     find_track_by_id,
     pick_interlude,
     pick_random_track,
@@ -15,6 +17,8 @@ from .resume_state_store import PlaybackResumeStateStore, ResumeCheckpointManage
 __all__ = [
     "MusicChannelService",
     "StoriesChannelService",
+    "StorySeriesSummary",
+    "StoriesAdvanceResult",
     "pick_random_track",
     "pick_interlude",
     "find_track_by_id",

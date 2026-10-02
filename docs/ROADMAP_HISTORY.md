@@ -191,3 +191,94 @@ exception ISD v3 carries for the identical shape).
 backend phase (1-5) of this build. **All 112 tests passing. Standing
 instruction from the owner, 2026-10-01: Phase 6 (the frontend) does not
 start without the owner.**
+
+## 2026-10-01 — Stories re-architected: tuned per-series, not one combined channel
+
+The owner pasted a visual design spec + two reference images for Phase 6
+mid-session (filed as a draft for the later design pass —
+`docs/design_spec_draft/`) and, discussing Screen A's channel selector,
+raised a real functional requirement that conflicts with the shipped
+Phase 1/3/4/5 design: Stories should be tuned **per series**, like
+Music's stations (pick exactly which story to hear), not one combined
+channel that auto-cycles through every series in a fixed order. Resolved
+directly with the owner across two rounds of questions:
+
+- Each story series now remembers its **own** resume position
+  independently (`schema.SeriesResumeState`, replacing the old singleton
+  `PlaybackResumeState`) — switching between stories never clobbers
+  another story's progress. Schema version bumped 1→2 (clean break, no
+  real persisted data on this gaming-PC test environment to migrate).
+- Each series also tracks a `listened` flag, set once it's been heard
+  through to its end. Finishing a series auto-advances into the next
+  series that hasn't been heard yet (`solvers.story_sequence.
+  pick_next_unlistened_series` — forward search from just after the
+  finished series, wrapping around once) — **owner's own words**: "it
+  will start the next story that hasn't been listened to yet."
+- Re-tuning into an already-`listened` series restarts fresh at part 1,
+  not at its old end-of-story position (`resume_part_for_series`).
+- Once every series has been heard at least once, auto-advance **stops**
+  — owner's explicit call, not a reset-and-loop of the whole library and
+  not an infinite repeat of the last series. The listener must manually
+  tune into a story to keep going.
+- Marking a series `listened` is always an immediate, unthrottled write
+  (`ResumeCheckpointManager.mark_listened`) — a completion milestone, not
+  a periodic position tick; losing it to a crash before the next
+  throttled checkpoint would wrongly un-complete an already-heard story.
+  Each series' own periodic position checkpoint is now throttled
+  independently (a `dict[str, float]` of last-write times, not one global
+  clock), so tuning between two stories within one's throttle window
+  never blocks the other's write.
+
+Shipped: `schema/playback_resume_state.py` rewritten (`SeriesResumeState`
++ `PlaybackResumeState` as an immutable tuple of per-series entries, with
+`for_series`/`listened_series_ids`/`with_series` helpers),
+`solvers/story_sequence.py` rewritten (`resume_part_for_series`,
+`next_part_in_series`, `pick_next_unlistened_series` — replacing the old
+single global `resolve_next_story_position` walk),
+`services/resume_state_store.py` (`ResumeCheckpointManager.checkpoint`
+now throttles per-series; new `mark_listened`),
+`services/playback_service.py` (`StoriesChannelService` rewritten:
+`list_series`/`tune_in`/`advance` replacing `current_position`/
+`current_elapsed_seconds`/`advance`'s old signature; new
+`StorySeriesSummary`/`StoriesAdvanceResult` result types),
+`web/routers/stories.py` rewritten (`GET /series`, `GET /series/{id}`
+replacing `GET /current`; `POST /advance` response now carries
+`series_completed`).
+
+All Stories-touching tests rewritten to match (`test_playback_resume_state.py`,
+`test_story_sequence.py`, `test_resume_state_store.py`,
+`test_playback_service.py`, `test_stories_router.py`) — 139/139 tests
+passing, Iron Gate clean first-pass.
+
+## 2026-10-01 — Phase 6: frontend functional skeleton
+
+Shipped with the owner live, after the Stories re-architecture above:
+plain, un-styled HTML/JS wired to the real endpoints
+(`src/web/static/index.html`, `js/api.js`, `js/musicChannel.js`,
+`js/storiesChannel.js`, `js/app.js`), mounted in `web/app.py` via
+`StaticFiles` (a `_NoCacheStaticFiles` subclass forcing
+`Cache-Control: no-cache` so a rebuild's JS isn't served stale from
+browser heuristic caching — hand-matched fact from ISD v3's own
+`web/app.py`, a real bug it hit during its own desktop-shell packaging).
+Station and story-series lists are always re-fetched from the server,
+never hardcoded — a new `music/`/`stories/` subfolder (or an
+`extra_*_dirs` override) shows up with no frontend change, confirmed live
+(added a folder while the server was running, reloaded, it appeared).
+Explicitly a placeholder per the standing plan — real visual design
+(`docs/design_spec_draft/`) is a separate later pass.
+
+Verified live via a new `ird-v3-test` root-level test launcher
+(`.claude/test_launchers/ird_v3_test_main.py`, port 18061 — seeds
+isolated synthetic silent-WAV music/stories/interlude content, never
+touching the real gitignored `music/`/`stories/` folders): music
+tune-in/auto-advance, Stories per-series tune-in, mid-series resume,
+auto-advance to the next unlistened series on completion, the
+already-listened restart-at-part-1 behavior, and the full-library
+"every story heard, stop" state — all confirmed against the real running
+app in a browser, not just unit tests.
+
+142/142 tests passing, Iron Gate clean first-pass.
+
+**Left in Phase 6**: nothing functional — the real visual design pass
+(`docs/design_spec_draft/FRONTEND_VISUAL_DESIGN_DRAFT.md`) is still
+ahead, and Phase 7 (the desktop shell) hasn't started.

@@ -121,49 +121,112 @@ def _make_story_series(cfg: Config) -> None:
             _write_silent_wav(series_dir / f"{series_name}{n}.wav")
 
 
-def test_current_position_starts_at_first_series_first_part_with_no_resume_state(tmp_path):
+def test_list_series_is_alphabetical_with_no_resume_state(tmp_path):
     cfg = _make_config(tmp_path)
     _make_story_series(cfg)
     service = StoriesChannelService(config=cfg, checkpoint_manager=_checkpoint_manager(cfg))
 
-    position = service.current_position()
-    assert position == (StorySeriesId("alien_invasion"), StoryPartNumber(1))
+    summaries = service.list_series()
+    assert [s.series_id.value for s in summaries] == ["alien_invasion", "zeta_front"]
+    assert [s.part_count for s in summaries] == [3, 2]
+    assert all(not s.listened for s in summaries)
+    assert all(s.resume_part_number == StoryPartNumber(1) for s in summaries)
 
 
-def test_current_position_resumes_at_saved_checkpoint(tmp_path):
+def test_list_series_reflects_a_saved_resume_position(tmp_path):
     cfg = _make_config(tmp_path)
     _make_story_series(cfg)
     manager = _checkpoint_manager(cfg)
     manager.checkpoint(series_id=StorySeriesId("zeta_front"), part_number=StoryPartNumber(2), elapsed_seconds=42.0, force=True)
 
     service = StoriesChannelService(config=cfg, checkpoint_manager=manager)
-    assert service.current_position() == (StorySeriesId("zeta_front"), StoryPartNumber(2))
-    assert service.current_elapsed_seconds() == 42.0
+    zeta = next(s for s in service.list_series() if s.series_id.value == "zeta_front")
+    assert zeta.resume_part_number == StoryPartNumber(2)
+    assert zeta.listened is False
 
 
-def test_current_position_falls_back_when_checkpoint_points_at_deleted_content(tmp_path):
+def test_tune_in_starts_at_first_part_with_no_resume_state(tmp_path):
+    cfg = _make_config(tmp_path)
+    _make_story_series(cfg)
+    service = StoriesChannelService(config=cfg, checkpoint_manager=_checkpoint_manager(cfg))
+
+    result = service.tune_in(StorySeriesId("alien_invasion"))
+    assert result == (StoryPartNumber(1), 0.0)
+
+
+def test_tune_in_resumes_at_the_saved_checkpoint(tmp_path):
     cfg = _make_config(tmp_path)
     _make_story_series(cfg)
     manager = _checkpoint_manager(cfg)
-    manager.checkpoint(series_id=StorySeriesId("ghost_series"), part_number=StoryPartNumber(1), elapsed_seconds=5.0, force=True)
+    manager.checkpoint(series_id=StorySeriesId("zeta_front"), part_number=StoryPartNumber(2), elapsed_seconds=42.0, force=True)
 
     service = StoriesChannelService(config=cfg, checkpoint_manager=manager)
-    assert service.current_position() == (StorySeriesId("alien_invasion"), StoryPartNumber(1))
+    assert service.tune_in(StorySeriesId("zeta_front")) == (StoryPartNumber(2), 42.0)
 
 
-def test_current_position_is_none_with_no_story_content(tmp_path):
+def test_tune_in_restarts_fresh_once_already_listened(tmp_path):
     cfg = _make_config(tmp_path)
+    _make_story_series(cfg)
+    manager = _checkpoint_manager(cfg)
+    manager.checkpoint(series_id=StorySeriesId("zeta_front"), part_number=StoryPartNumber(2), elapsed_seconds=42.0, force=True)
+    manager.mark_listened(StorySeriesId("zeta_front"), final_part_number=StoryPartNumber(2))
+
+    service = StoriesChannelService(config=cfg, checkpoint_manager=manager)
+    assert service.tune_in(StorySeriesId("zeta_front")) == (StoryPartNumber(1), 0.0)
+
+
+def test_tune_in_returns_none_for_a_nonexistent_series(tmp_path):
+    cfg = _make_config(tmp_path)
+    _make_story_series(cfg)
     service = StoriesChannelService(config=cfg, checkpoint_manager=_checkpoint_manager(cfg))
-    assert service.current_position() is None
+    assert service.tune_in(StorySeriesId("ghost_series")) is None
 
 
-def test_advance_moves_to_next_part(tmp_path):
+def test_advance_moves_to_next_part_within_the_same_series(tmp_path):
     cfg = _make_config(tmp_path)
     _make_story_series(cfg)
     service = StoriesChannelService(config=cfg, checkpoint_manager=_checkpoint_manager(cfg))
 
-    next_position = service.advance(StorySeriesId("alien_invasion"), StoryPartNumber(1))
-    assert next_position == (StorySeriesId("alien_invasion"), StoryPartNumber(2))
+    result = service.advance(StorySeriesId("alien_invasion"), StoryPartNumber(1))
+    assert result.next_position == (StorySeriesId("alien_invasion"), StoryPartNumber(2))
+    assert result.series_completed is False
+
+
+def test_advance_past_the_last_part_marks_listened_and_moves_to_next_unlistened_series(tmp_path):
+    cfg = _make_config(tmp_path)
+    _make_story_series(cfg)  # alien_invasion (3 parts), zeta_front (2 parts)
+    manager = _checkpoint_manager(cfg)
+    service = StoriesChannelService(config=cfg, checkpoint_manager=manager)
+
+    result = service.advance(StorySeriesId("alien_invasion"), StoryPartNumber(3))
+    assert result.next_position == (StorySeriesId("zeta_front"), StoryPartNumber(1))
+    assert result.series_completed is True
+    assert manager.load().for_series("alien_invasion").listened is True
+
+
+def test_advance_past_the_last_part_resumes_a_partially_heard_unlistened_series(tmp_path):
+    cfg = _make_config(tmp_path)
+    _make_story_series(cfg)
+    manager = _checkpoint_manager(cfg)
+    manager.checkpoint(
+        series_id=StorySeriesId("zeta_front"), part_number=StoryPartNumber(2), elapsed_seconds=5.0, force=True
+    )
+    service = StoriesChannelService(config=cfg, checkpoint_manager=manager)
+
+    result = service.advance(StorySeriesId("alien_invasion"), StoryPartNumber(3))
+    assert result.next_position == (StorySeriesId("zeta_front"), StoryPartNumber(2))
+
+
+def test_advance_stops_once_every_series_has_been_listened(tmp_path):
+    cfg = _make_config(tmp_path)
+    _make_story_series(cfg)
+    manager = _checkpoint_manager(cfg)
+    manager.mark_listened(StorySeriesId("zeta_front"), final_part_number=StoryPartNumber(2))
+    service = StoriesChannelService(config=cfg, checkpoint_manager=manager)
+
+    result = service.advance(StorySeriesId("alien_invasion"), StoryPartNumber(3))
+    assert result.next_position is None
+    assert result.series_completed is True
 
 
 def test_track_for_position_returns_the_real_track(tmp_path):
@@ -183,4 +246,4 @@ def test_checkpoint_persists_through_the_service(tmp_path):
     service = StoriesChannelService(config=cfg, checkpoint_manager=manager)
 
     service.checkpoint(StorySeriesId("alien_invasion"), StoryPartNumber(3), 12.0, force=True)
-    assert service.current_position() == (StorySeriesId("alien_invasion"), StoryPartNumber(3))
+    assert service.tune_in(StorySeriesId("alien_invasion")) == (StoryPartNumber(3), 12.0)
