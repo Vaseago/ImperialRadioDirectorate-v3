@@ -52,9 +52,14 @@ Approved architecture/scope plan: `C:\Users\vasea\.claude\plans\misty-cuddling-m
 
 ## Phase 4 — Services
 
-- [ ] `src/services/playback_service.py` — orchestrates scanner +
-  scheduler + resume-state store.
-- [ ] `src/services/resume_state_store.py` — periodic checkpoint writer.
+- [x] `src/services/playback_service.py` — `MusicChannelService`
+  (list stations, pick a track avoiding immediate repeat),
+  `StoriesChannelService` (resume-aware current position, advance,
+  per-position track lookup), shared `pick_interlude()` (same pool for
+  both channels).
+- [x] `src/services/resume_state_store.py` — `PlaybackResumeStateStore`
+  (typed persistence) + `ResumeCheckpointManager` (throttled-write
+  policy: once per `min_interval_seconds` unless `force=True`).
 
 ## Phase 5 — Web
 

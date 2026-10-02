@@ -111,3 +111,27 @@ the real `Track` for playback.
 
 **Left in Phase 3**: nothing — Phase 3 is complete. Phase 4 (services:
 orchestration + the resume-state checkpoint writer) is next.
+
+## 2026-10-01 — Phase 4: services/ (playback_service, resume_state_store)
+
+Shipped: `services/resume_state_store.py` (`PlaybackResumeStateStore` —
+typed `JsonStore` wrapper, the Manager Isolation Law's real
+persisted-document Store; `ResumeCheckpointManager` — the throttled-write
+policy on top of it, once per `min_interval_seconds` (default 15s) unless
+`force=True`, "as close as possible," not continuous — the owner's own
+words) and `services/playback_service.py` (`MusicChannelService` —
+station listing + random-track-pick avoiding immediate repeat, a verified
+UX fact carried forward from legacy; `StoriesChannelService` —
+resume-aware `current_position()` that validates a saved checkpoint
+still points at real content before trusting it, falling back to the very
+first position if a series/part was deleted since; `advance()` wraps
+Phase 3's pure solver; shared `pick_interlude()` used by both channels
+from the one `commercials_and_snippets/` pool, confirmed directly with
+the owner there's no separate story/music interlude distinction).
+
+95/95 tests passing (real synthetic WAV files on disk, same technique as
+Phase 2's scanner tests — not mocks), Iron Gate clean first-pass.
+
+**Left in Phase 4**: nothing — Phase 4 is complete. Phase 5 (the FastAPI
+web app + routers, including the explicit MIME-mapping gap flagged during
+Phase 2) is next.
