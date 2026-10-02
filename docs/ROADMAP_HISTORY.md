@@ -47,3 +47,38 @@ empty allowlist, no Store/Manager pair exists yet; `ruff check` clean).
 
 **Left in Phase 1**: nothing — Phase 1 is complete. Phase 2 (library
 adapters: music/commercials scanning, story-series scanning) is next.
+
+## 2026-10-01 — Phase 2: adapters/library/ (scanner, story_scanner)
+
+Shipped: `adapters/library/models.py` (`Track`, re-derived from legacy
+IRD's own `library/models.py` — wraps `TrackId`/`StationName` instead of
+bare strings), `adapters/library/scanner.py` (`scan_library_dirs` — real
+verified facts carried forward from legacy: `sha1(relative_path)[:16]`
+track-id scheme, `mutagen.File(path, easy=True)` tag read with a
+cleaned-filename fallback, folder-per-station derivation with a "General"
+catch-all — used for both `music/` and `commercials_and_snippets/`),
+`adapters/library/story_scanner.py` (`scan_story_dirs` — new: each
+`stories/` subfolder is a series, parts ordered by the trailing digit run
+in the filename via regex, NOT a string sort, so `alien_invasion10` sorts
+after `alien_invasion2`; a file with no trailing digits is skipped rather
+than guessed at; series themselves sort alphabetically by folder name).
+
+The owner passed along a Gemini-drafted note mid-phase ("Universal Audio
+Support" for Phase 2/5) asking to confirm broad format support, filename
+fallback, and dynamic MIME mapping. Verified directly against this repo's
+own `config.SUPPORTED_AUDIO_EXTENSIONS` and a live `mimetypes.guess_type()`
+check rather than taking it at face value: the extension list and
+filename-fallback behavior were already exactly what it asked for (no
+change needed), but the MIME-mapping point was real and new — confirmed
+`.mp4` guesses as `video/mp4`, `.aac` as the non-standard
+`audio/vnd.dlna.adts`, `.flac` as the older `audio/x-flac`. Folded into
+Phase 5's own scope (see `PART_INVENTORY.md`) rather than acted on here,
+since Phase 2 has no HTTP/MIME layer at all.
+
+Tests use real synthetic silent `.wav` files generated on the fly (the
+`wave` stdlib module, same real-file-not-mocked technique legacy IRD
+verified), not mocks — 54/54 tests passing, Iron Gate clean first-pass
+(ruff-clean over the new `adapters/` layer too).
+
+**Left in Phase 2**: nothing — Phase 2 is complete. Phase 3 (solvers: the
+ad-roll scheduler, story-sequencing walk) is next.

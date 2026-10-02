@@ -25,10 +25,18 @@ Approved architecture/scope plan: `C:\Users\vasea\.claude\plans\misty-cuddling-m
 
 ## Phase 2 — Library adapters
 
-- [ ] `src/adapters/library/scanner.py` — music + commercials scanning
+- [x] `src/adapters/library/models.py` — `Track` (wraps `TrackId`/
+  `StationName`, re-derived from legacy IRD's own `library/models.py`).
+- [x] `src/adapters/library/scanner.py` — music + commercials scanning
   (`mutagen` tag read, filename fallback, folder-per-station derivation).
-- [ ] `src/adapters/library/story_scanner.py` — walks `stories/<series>/`,
-  derives part order from filename numeric suffix.
+  Verified real Gemini-sourced suggestion against the actual `mutagen`/
+  stdlib behavior 2026-10-01: nothing changed here (extensions/fallback
+  already matched), but it surfaced a real Phase 5 MIME-mapping gap — see
+  that phase's own bullet below.
+- [x] `src/adapters/library/story_scanner.py` — walks `stories/<series>/`,
+  derives part order from the filename's trailing digit run (numeric sort,
+  not string sort — `alien_invasion10` sorts after `alien_invasion2`). A
+  file with no trailing digits is skipped, not guessed at.
 
 ## Phase 3 — Solvers
 
