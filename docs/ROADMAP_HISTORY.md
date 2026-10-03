@@ -343,3 +343,20 @@ moving that tag is the owner's call alone, flagged here per the policy's
 own "proactively flag it, every time" rule.
 
 175/175 tests passing, Iron Gate clean first-pass.
+
+## 2026-10-02 — CCP trademark notice and third-party notices (IRD)
+
+IRD uses no CCP Game Data, ESI, SDE or EVE SSO, so the Developer License's
+section 7.1 notice is not strictly required here; the README and new
+`THIRD_PARTY_NOTICES.md` carry CCP's trademark statement plus an "unofficial
+fan-made tool" line anyway, since the app is EVE-themed. No in-app footer (the
+frontend is still the un-styled skeleton; revisit when the visual design lands).
+
+**Real finding: `mutagen` is GPL-2.0-or-later.** It is IRD's audio-tag dependency
+and the only copyleft dependency in the v3 suite. If IRD is ever distributed to
+others, that distribution must satisfy the GPL, which constrains which license
+IRD's own code can use. Flagged in `THIRD_PARTY_NOTICES.md`; the license choice
+itself is the owner's (root `TODO.md`, public-release checklist).
+
+Guard: `test_ccp_notice.py` fails if the notices disappear or the GPL flag is
+dropped. Full suite 177 passing, Iron Gate clean.

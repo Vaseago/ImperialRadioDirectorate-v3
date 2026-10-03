@@ -33,3 +33,18 @@ Serves the Phase 6 functional-skeleton frontend (plain, un-styled HTML/JS
 synthetic test content instead of your real `music/`/`stories/` folders,
 use the root-level `ird-v3-test` launcher (`../.claude/test_launchers/ird_v3_test_main.py`,
 port 18061).
+
+## Legal and third-party notices
+
+© 2014 CCP hf. All rights reserved. 'EVE', 'EVE Online', 'CCP', and all related logos and images are trademarks or registered trademarks of CCP hf.
+
+EVE Online and the EVE logo are the registered trademarks of CCP hf. All rights are reserved worldwide. EVE Online, the EVE logo, EVE and all associated logos and designs are the intellectual property of CCP hf. All artwork, screenshots, characters, vehicles, storylines, world facts or other recognizable features of the intellectual property relating to these trademarks are likewise the intellectual property of CCP hf.
+
+This is an unofficial fan-made tool, not made, endorsed or supported by CCP.
+
+This project uses no CCP Game Data, ESI, SDE or EVE SSO; the notice above
+covers its use of EVE-related names and theming.
+
+Third-party libraries and data sources are credited in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). This project's own license has
+not been chosen yet.
