@@ -21,7 +21,7 @@ from fastapi.testclient import TestClient
 from web.app import create_app
 
 _STATIC = Path(__file__).resolve().parents[2] / "src" / "web" / "static"
-_PANEL_KINDS = {"page", "card", "table", "modal"}
+_PANEL_KINDS = {"page", "card", "table", "modal", "button"}
 _TAG = re.compile(r"<([a-zA-Z][a-zA-Z0-9]*)\b([^<>]*?)>")
 
 
@@ -173,5 +173,21 @@ def test_the_embed_assets_are_served(make_config):
     client = TestClient(create_app(make_config()))
     assert client.get("/css/embed.css").status_code == 200
     assert client.get("/js/icdEmbed.js").status_code == 200
+    assert client.get("/js/embedButtons.js").status_code == 200
     html = client.get("/").text
-    assert 'href="css/embed.css"' in html and 'src="js/icdEmbed.js"' in html
+    assert 'href="css/embed.css"' in html and 'src="js/icdEmbed.js"' in html and 'src="js/embedButtons.js"' in html
+
+
+def test_buttons_are_stamped_only_in_embed_mode_and_never_by_hand():
+    """Embed mode stamps `data-icd-panel="button"` on every button (embedButtons.js) so ICD can tighten the spacing
+    (contract section 4). It must do nothing without the flag, so a normal visit is unchanged."""
+    script = _read("js/embedButtons.js")
+    assert 'if (document.documentElement.dataset.embed !== "1") return;' in script  # the single gate
+    assert 'el.dataset.icdPanel = "button"' in script and "MutationObserver" in script
+    assert "audio" not in script.lower().replace("never touches the audio element", "")  # Radio's player is left alone
+    html = _read("index.html")
+    assert html.index('src="js/embedButtons.js"') > html.index('src="js/icdEmbed.js"')
+    for path in sorted((_STATIC / "js").glob("*.js")) + [_STATIC / "index.html"]:
+        if path.name != "embedButtons.js":  # nothing else may write the sticker (it would then exist in a normal visit)
+            text = path.read_text(encoding="utf-8")
+            assert 'icdPanel = "button"' not in text and 'data-icd-panel="button"' not in text
