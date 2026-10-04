@@ -18,7 +18,7 @@ def write_silent_wav(path: Path, seconds: float = 0.5, sample_rate: int = 8000) 
         f.setnchannels(1)
         f.setsampwidth(2)
         f.setframerate(sample_rate)
-        f.writeframes(struct.pack("<%dh" % n_frames, *([0] * n_frames)))
+        f.writeframes(struct.pack(f"<{n_frames}h", *([0] * n_frames)))
 
 
 def _make_series(cfg, name: str, parts: tuple[int, ...]) -> None:

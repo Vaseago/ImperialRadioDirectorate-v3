@@ -18,7 +18,7 @@ def _write_silent_wav(path: Path, seconds: float = 1.0, sample_rate: int = 8000)
         f.setnchannels(1)
         f.setsampwidth(2)
         f.setframerate(sample_rate)
-        f.writeframes(struct.pack("<%dh" % n_frames, *([0] * n_frames)))
+        f.writeframes(struct.pack(f"<{n_frames}h", *([0] * n_frames)))
 
 
 def test_scan_extracts_duration_and_falls_back_to_filename_title(tmp_path):

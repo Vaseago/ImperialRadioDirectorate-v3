@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from primitives import D100Roll, DomainRuleViolation, StationName, StorySeriesId, StoryPartNumber, TrackId
+from primitives import D100Roll, DomainRuleViolation, StationName, StoryPartNumber, StorySeriesId, TrackId
 
 
 def test_track_id_rejects_empty():

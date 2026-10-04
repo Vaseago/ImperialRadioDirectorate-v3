@@ -20,7 +20,7 @@ def _write_silent_wav(path: Path, seconds: float = 0.5) -> None:
         f.setnchannels(1)
         f.setsampwidth(2)
         f.setframerate(8000)
-        f.writeframes(struct.pack("<%dh" % n_frames, *([0] * n_frames)))
+        f.writeframes(struct.pack(f"<{n_frames}h", *([0] * n_frames)))
 
 
 def _make_config(tmp_path: Path) -> Config:
@@ -137,7 +137,12 @@ def test_list_series_reflects_a_saved_resume_position(tmp_path):
     cfg = _make_config(tmp_path)
     _make_story_series(cfg)
     manager = _checkpoint_manager(cfg)
-    manager.checkpoint(series_id=StorySeriesId("zeta_front"), part_number=StoryPartNumber(2), elapsed_seconds=42.0, force=True)
+    manager.checkpoint(
+        series_id=StorySeriesId("zeta_front"),
+        part_number=StoryPartNumber(2),
+        elapsed_seconds=42.0,
+        force=True,
+    )
 
     service = StoriesChannelService(config=cfg, checkpoint_manager=manager)
     zeta = next(s for s in service.list_series() if s.series_id.value == "zeta_front")
@@ -158,7 +163,12 @@ def test_tune_in_resumes_at_the_saved_checkpoint(tmp_path):
     cfg = _make_config(tmp_path)
     _make_story_series(cfg)
     manager = _checkpoint_manager(cfg)
-    manager.checkpoint(series_id=StorySeriesId("zeta_front"), part_number=StoryPartNumber(2), elapsed_seconds=42.0, force=True)
+    manager.checkpoint(
+        series_id=StorySeriesId("zeta_front"),
+        part_number=StoryPartNumber(2),
+        elapsed_seconds=42.0,
+        force=True,
+    )
 
     service = StoriesChannelService(config=cfg, checkpoint_manager=manager)
     assert service.tune_in(StorySeriesId("zeta_front")) == (StoryPartNumber(2), 42.0)
@@ -168,7 +178,12 @@ def test_tune_in_restarts_fresh_once_already_listened(tmp_path):
     cfg = _make_config(tmp_path)
     _make_story_series(cfg)
     manager = _checkpoint_manager(cfg)
-    manager.checkpoint(series_id=StorySeriesId("zeta_front"), part_number=StoryPartNumber(2), elapsed_seconds=42.0, force=True)
+    manager.checkpoint(
+        series_id=StorySeriesId("zeta_front"),
+        part_number=StoryPartNumber(2),
+        elapsed_seconds=42.0,
+        force=True,
+    )
     manager.mark_listened(StorySeriesId("zeta_front"), final_part_number=StoryPartNumber(2))
 
     service = StoriesChannelService(config=cfg, checkpoint_manager=manager)

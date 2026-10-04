@@ -241,4 +241,5 @@ def test_ruff_check_is_clean():
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 0, "ruff check failed — fix the violation, don't relax this test:\n" + result.stdout + result.stderr
+    message = "ruff check failed — fix the violation, don't relax this test:\n"
+    assert result.returncode == 0, message + result.stdout + result.stderr
