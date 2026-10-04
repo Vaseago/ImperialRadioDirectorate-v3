@@ -360,3 +360,36 @@ itself is the owner's (root `TODO.md`, public-release checklist).
 
 Guard: `test_ccp_notice.py` fails if the notices disappear or the GPL flag is
 dropped. Full suite 177 passing, Iron Gate clean.
+
+
+## 2026-10-04 - Embed mode for the ICD desktop app (ICD Part 3)
+
+IRD implements the ICD embed contract v1 (`../ImperialCommandDirectorate/docs/EMBED_CONTRACT.md`) by its
+own means: its frontend is plain classic scripts with no router, no theme and no WebSocket, so this is the
+smallest possible hook, not the visual pass.
+
+- **Boot:** an inline `<head>` script reads `?embed=1` / `?embed=0` and the per-window `icd.embed` flag in
+  `sessionStorage`, and stamps `data-embed="1"` and `data-theme="icd"` on `<html>` (IRD has no stored theme to
+  lock out). `css/embed.css` hides the new `#app-header` / `#app-nav` wrappers (the title text and the
+  Music/Stories buttons), every rule gated on the flag. IRD has no footer, so there is nothing to keep for the CCP
+  notice; ICD shows it itself.
+- **`window.icdEmbed`** (`js/icdEmbed.js`, installed from `app.js`): `getNav()` lists the app's own views -
+  Music, Stories, and a **Settings** view (kind `settings`) that holds the application-update panel, which is
+  hidden in embed mode except on that view. `navigate(id)` opens one. Opening Settings, or returning to the
+  channel already tuned, never touches the player, so ICD can flip views while something plays (the channel
+  buttons themselves keep their old pause-and-retune behaviour).
+- **`getStatus()`:** `connection` is the outcome of the last request (`connecting` until one answers,
+  `connected` whenever the server answers, `disconnected` when it cannot be reached - IRD has no WebSocket, so
+  `reconnecting` is never reported); `updateAvailable` and `restartPending` come from the update panel.
+- **Stickers:** `<main id="app-main" data-icd-panel="page">` and the three panels as `card`.
+- Guard: `tests/unit/test_embed_mode.py` (same sticker checker as the other apps, plus IRD-specific checks that the
+  view-opening code never touches the player).
+
+Verified: suite 190 passing, ruff clean on `src`; live in the browser pane with and without the flag (normal
+visit unchanged and has no `icdEmbed`; embed hides the chrome, lists the three views, filters theme tokens, keeps
+the flag across a flagless reload, `?embed=0` restores the page; a playing silent clip kept playing through
+Music -> Settings -> Music; no console errors). Not verified: the real Qt window, and the update panel's
+`updateAvailable` / `restartPending` against a real pending update on the Pi.
+
+Noticed, not fixed (not part of this change): IRD has 16 ruff findings under `tests/` (E501, UP031, I001); its
+Iron Gate lints `src/` only.

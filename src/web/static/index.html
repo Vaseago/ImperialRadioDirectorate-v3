@@ -4,18 +4,46 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Imperial Radio Directorate</title>
+<!-- Embed mode boot: must be inline and run before first paint. The ONE
+     decision point (js/icdEmbed.js and css/embed.css only read the
+     data-embed attribute set here). ICD loads the page with ?embed=1; the
+     flag is remembered per window in sessionStorage so it survives any
+     redirect to a flagless "/"; ?embed=0 clears it. IRD has no theme of its
+     own, so embed mode only stamps data-theme="icd". The contract is ICD's
+     docs/EMBED_CONTRACT.md. -->
+<script>
+  (function () {
+    var EMBED_KEY = "icd.embed";
+    var flag = null;
+    try { flag = new URLSearchParams(window.location.search).get("embed"); } catch (e) {}
+    var embed = flag === "1";
+    try {
+      if (flag === "1") window.sessionStorage.setItem(EMBED_KEY, "1");
+      else if (flag === "0") window.sessionStorage.removeItem(EMBED_KEY);
+      else embed = window.sessionStorage.getItem(EMBED_KEY) === "1";
+    } catch (e) {}
+    if (embed) {
+      document.documentElement.dataset.embed = "1";
+      document.documentElement.dataset.theme = "icd";
+    }
+  })();
+</script>
+<link rel="stylesheet" href="css/embed.css">
 </head>
 <body>
-<h1>Imperial Radio Directorate</h1>
-<p>Phase 6 functional skeleton &mdash; no visual design yet. Real visual design
-is a separate later pass.</p>
+<header id="app-header">
+  <h1>Imperial Radio Directorate</h1>
+  <p>Phase 6 functional skeleton &mdash; no visual design yet. Real visual design
+  is a separate later pass.</p>
+</header>
 
-<nav>
+<nav id="app-nav">
   <button id="channel-music-btn" type="button">Music</button>
   <button id="channel-stories-btn" type="button">Stories</button>
 </nav>
 
-<section id="music-panel" hidden>
+<main id="app-main" data-icd-panel="page">
+<section id="music-panel" class="card" data-icd-panel="card" hidden>
   <h2>Music</h2>
   <label for="station-select">Station</label>
   <select id="station-select"></select>
@@ -23,7 +51,7 @@ is a separate later pass.</p>
   <p id="music-now-playing">Nothing playing</p>
 </section>
 
-<section id="stories-panel" hidden>
+<section id="stories-panel" class="card" data-icd-panel="card" hidden>
   <h2>Stories</h2>
   <ul id="story-series-list"></ul>
   <p id="stories-now-playing">Nothing playing</p>
@@ -31,17 +59,21 @@ is a separate later pass.</p>
 
 <audio id="player" controls></audio>
 
-<section id="app-update-panel" hidden>
+<section id="app-update-panel" class="card" data-icd-panel="card" hidden>
   <h2>Application Update</h2>
   <p id="app-update-status">Not checked yet.</p>
   <button id="app-update-check-btn" type="button">Check for Update</button>
   <button id="app-update-pull-btn" type="button" hidden>Pull &amp; Restart</button>
 </section>
 
+<p id="settings-unavailable" hidden>Application updates are not available on this install.</p>
+</main>
+
 <script src="js/api.js"></script>
 <script src="js/musicChannel.js"></script>
 <script src="js/storiesChannel.js"></script>
 <script src="js/appUpdate.js"></script>
+<script src="js/icdEmbed.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

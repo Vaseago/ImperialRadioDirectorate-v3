@@ -119,7 +119,11 @@ local media player with no EVE Online API dependency at all.
   WebSocket — IRD v3 has no hub, unlike the sibling v3 apps; the frontend
   just polls `GET /api/app-update/status`), `static/` (Phase 6's
   functional-skeleton frontend — plain HTML/JS, mounted last so the API
-  routers always take precedence).
+  routers always take precedence). Embed mode for the ICD desktop app
+  (`?embed=1`): inline boot script in `index.html`, `js/icdEmbed.js`
+  (`window.icdEmbed`), `css/embed.css`, `data-icd-panel` stickers; contract in
+  `../ImperialCommandDirectorate/docs/EMBED_CONTRACT.md`, guarded by
+  `tests/unit/test_embed_mode.py` — a new card/table/modal needs its sticker.
 - `ird_v3_web_main.py` — the real entry point.
 - `desktop_shell/` — (Phase 7, not yet built) thin PySide6 wrapper.
 - `music/`, `stories/`, `commercials_and_snippets/` — the three content

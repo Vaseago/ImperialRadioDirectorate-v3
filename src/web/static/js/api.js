@@ -6,8 +6,27 @@
 const CSRF_HEADER_NAME = "X-IRD-Request";
 const CSRF_HEADER_VALUE = "1";
 
+// Whether the last request reached the server - the "connection" the ICD
+// embed contract reports (js/icdEmbed.js). IRD has no WebSocket, so this is
+// the closest honest signal: "connecting" until a request has answered,
+// "connected" while the server answers (any HTTP status counts - it is
+// there), "disconnected" once a request cannot reach it at all.
+const ConnectionState = { status: "connecting" };
+
+async function trackedFetch(path, options) {
+  let resp;
+  try {
+    resp = await fetch(path, options);
+  } catch (err) {
+    ConnectionState.status = "disconnected";
+    throw err;
+  }
+  ConnectionState.status = "connected";
+  return resp;
+}
+
 async function apiGet(path) {
-  const resp = await fetch(path);
+  const resp = await trackedFetch(path);
   if (!resp.ok) throw new Error(`GET ${path} failed: ${resp.status}`);
   return resp.json();
 }
@@ -15,7 +34,7 @@ async function apiGet(path) {
 async function apiPost(path, body, { csrf = false } = {}) {
   const headers = { "Content-Type": "application/json" };
   if (csrf) headers[CSRF_HEADER_NAME] = CSRF_HEADER_VALUE;
-  const resp = await fetch(path, { method: "POST", headers, body: JSON.stringify(body) });
+  const resp = await trackedFetch(path, { method: "POST", headers, body: JSON.stringify(body) });
   if (!resp.ok) throw new Error(`POST ${path} failed: ${resp.status}`);
   return resp.json();
 }

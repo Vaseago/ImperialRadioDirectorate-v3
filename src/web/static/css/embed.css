@@ -1,0 +1,15 @@
+/* Embed mode (the boot script in index.html) - hides the chrome ICD draws
+   itself. Every rule here MUST be gated on :root[data-embed="1"] so a normal
+   visit is untouched; tests/unit/test_embed_mode.py enforces that. No
+   literal values. IRD has no footer; the CCP notice is ICD's to show. */
+
+:root[data-embed="1"] #app-header,
+:root[data-embed="1"] #app-nav {
+  display: none;
+}
+
+/* In embed mode the update panel is ICD's "Settings" entry: shown only on that view. */
+:root[data-embed="1"]:not([data-icd-view="settings"]) #app-update-panel,
+:root[data-embed="1"]:not([data-icd-view="settings"]) #settings-unavailable {
+  display: none;
+}

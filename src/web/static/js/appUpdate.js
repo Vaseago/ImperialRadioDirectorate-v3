@@ -4,6 +4,10 @@
  * has none) — this just polls `GET /api/app-update/status` once on load,
  * same as any other page reflecting server-side state. */
 
+// What the ICD embed contract's getStatus() reports about updates
+// (js/icdEmbed.js): an update waiting, and a restart that has been announced.
+const UpdateState = { updateAvailable: false, restartPending: false, restartMessage: "" };
+
 class AppUpdatePanel {
   constructor({ panel, statusText, checkButton, pullButton }) {
     this.panel = panel;
@@ -41,9 +45,15 @@ class AppUpdatePanel {
       ? "Update pulled — server is restarting..."
       : "Update pulled — please restart the server manually to load it.";
     this.pullButton.hidden = true;
+    UpdateState.updateAvailable = false;
+    if (result.self_restarting) {
+      UpdateState.restartPending = true;
+      UpdateState.restartMessage = "Update pulled - server is restarting...";
+    }
   }
 
   render(pending) {
+    UpdateState.updateAvailable = Boolean(pending);
     if (!pending) {
       this.statusText.textContent = "No pending update found (or not checked yet).";
       this.pullButton.hidden = true;
