@@ -230,13 +230,13 @@ def test_routers_never_import_a_store_directly():
 
 
 def test_ruff_check_is_clean():
-    """`ruff check` over the whole `src/` tree, under this repo's own
+    """`ruff check` over the whole `src/` AND `tests/` trees, under this repo's own
     `[tool.ruff]` config, must pass with zero violations — same "no
     warnings, no soft overrides" standard every other Iron Gate check
     holds. Shells out to the real `ruff` (installed as a `dev` extra,
     `pyproject.toml`) rather than re-implementing lint rules here."""
     result = subprocess.run(
-        [sys.executable, "-m", "ruff", "check", str(SRC)],
+        [sys.executable, "-m", "ruff", "check", str(SRC), str(REPO_ROOT / "tests")],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
