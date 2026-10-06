@@ -39,6 +39,7 @@ local media player with no EVE Online API dependency at all.
 - **Build once, cry once. No time constraints, ever.**
 - **This gaming PC is a test environment only** — process and data. The Pi
   is the only production server; never touch it.
+- **A refactor deletes what it makes obsolete, in the same commit (owner, 2026-10-06).** Any production module or helper rendered obsolete by a refactor is deleted in the exact same commit, along with its tests. A test that relies on a dead function instead of the new pattern is itself technical debt and goes down with it. Nothing is kept "for tidiness", "for scripts" or "just in case".
 - **Git & Workflow:** commit and push after each distinct, working build
   step; never stockpile changes. Master branch only — branch only when the
   owner explicitly asks. Never touch a version string/CHANGELOG unless
